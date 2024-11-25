@@ -19,10 +19,4 @@ public class MessageList {
     public synchronized ArrayList<String> getClone(){
         return new ArrayList<String>(messageList);
     }
-
-    public synchronized void createSendStructure(){
-        for(String message : messageList ){
-
-        }
-    }
 }
