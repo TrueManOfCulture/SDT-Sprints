@@ -1,9 +1,9 @@
 import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.*;
-import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 public class messageSender extends Thread {
     protected MulticastSocket socket = null;
@@ -22,7 +22,8 @@ public class messageSender extends Thread {
     public void run() {
         try {
             while (true) {
-                var messages = messageList.getClone();
+                HashMap<Integer,String> messages = messageList.getClone();
+                messageList.clear();
 
                 if (messages.isEmpty()) {
                     System.out.println("No messages to send.");

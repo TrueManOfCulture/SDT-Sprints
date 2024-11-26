@@ -30,9 +30,6 @@ public class messageReceiver extends Thread {
                 List<String> receivedMsgs = (List<String>) objStream.readObject();
 
                 System.out.println("Heartbeat " + id + " received messages:");
-                /*for (String msg : receivedMsgs) {
-                    System.out.println(" - " + msg);
-                }*/
                 System.out.println(receivedMsgs);
                 if (receivedMsgs.contains("end")) {
                     System.out.println("End signal received, closing receiver...");
@@ -49,6 +46,21 @@ public class messageReceiver extends Thread {
             }
             socket.close();
         }
+    }
+
+    public void sendAckToLeader(int leaderId, String message) {
+        /*int leaderPort = 6000 + leaderId;
+
+        try (Socket socket = new Socket("localhost", leaderPort);
+             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream())) {
+
+            // Send the ACK
+            oos.writeObject(message);
+            System.out.println("Entity " + id + " sent ACK: " + message);
+
+        } catch (IOException e) {
+            System.err.println("Error sending ACK to Leader " + leaderId + ": " + e.getMessage());
+        }*/
     }
 }
 

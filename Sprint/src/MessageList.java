@@ -1,22 +1,34 @@
-import java.util.ArrayList;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
 
-public class MessageList {
+public class MessageList  extends UnicastRemoteObject implements MessageListInterface {
     static boolean lock = false;
-    ArrayList<String> messageList = new ArrayList<String>();
+    HashMap<Integer,String> messageList = new HashMap<Integer,String>();
 
-    public MessageList(ArrayList<String> messageList) {
+    public MessageList(HashMap<Integer,String> messageList) throws RemoteException {
+        super();
         this.messageList = messageList;
     }
 
-    public synchronized void addElement(String e){
-        messageList.add(e);
+    public MessageList() throws RemoteException {
+        super();
+
     }
 
-    public synchronized void removeElement(String e){
-        messageList.remove(e);
+    public synchronized void addElement(int k, String o){
+        messageList.put(k,o);
     }
 
-    public synchronized ArrayList<String> getClone(){
-        return new ArrayList<String>(messageList);
+    public synchronized void removeElement(int k){
+        messageList.remove(k);
+    }
+
+    public synchronized HashMap<Integer,String> getClone(){
+        return new HashMap<Integer,String>(messageList);
+    }
+
+    public synchronized void clear(){
+        messageList.clear();
     }
 }
