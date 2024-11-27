@@ -29,7 +29,7 @@ public class messageReceiver extends Thread {
                 ObjectInputStream objStream = new ObjectInputStream(byteStream);
                 List<String> receivedMsgs = (List<String>) objStream.readObject();
 
-                System.out.println("Heartbeat " + id + " received messages:");
+                System.out.println("Entity " + id + " received messages:");
                 System.out.println(receivedMsgs);
                 if (receivedMsgs.contains("end")) {
                     System.out.println("End signal received, closing receiver...");
