@@ -3,7 +3,7 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 
 public class MessageList  extends UnicastRemoteObject implements MessageListInterface {
-    HashMap<Integer,String> messageList = new HashMap<Integer,String>();
+    HashMap messageList = new HashMap();
 
     public MessageList(HashMap<Integer,String> messageList) throws RemoteException {
         super();
@@ -14,15 +14,15 @@ public class MessageList  extends UnicastRemoteObject implements MessageListInte
         super();
     }
 
-    public synchronized void addElement(int k, String o){
+    public synchronized void addElement(String k, String o){
         messageList.put(k,o);
     }
 
-    public synchronized void removeElement(int k){
+    public synchronized void removeElement(String k){
         messageList.remove(k);
     }
 
-    public synchronized HashMap<Integer,String> getClone(){
+    public synchronized HashMap<String,String> getClone(){
         return new HashMap(messageList);
     }
 
