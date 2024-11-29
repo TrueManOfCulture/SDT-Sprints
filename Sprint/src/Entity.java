@@ -1,13 +1,12 @@
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.UUID;
 
 public class Entity {
     private UUID id;
     private UUID idLider;
-    private HashMap data;
-    private HashMap dataPending;
+    private HashMap data = new HashMap();
+    private HashMap dataPending = new HashMap();
     private HashMap entidades;
     private NodeType type;
     private MessageList msgs;
@@ -17,11 +16,14 @@ public class Entity {
     private boolean votedInTerm = false;
     private long startTime;
 
+    public UUID getId() {
+        return id;
+    }
+
     public Entity() throws IOException, InterruptedException {
         id = UUID.randomUUID();
-        type = NodeType.Follower;
+        type = NodeType.NEW;
         timeoutLimit = HeartbeatTime.generateRandomTimeout();
-        //Codigo para verificar quem é o líder se não existir passar para candidato
         new messageSender(msgs,this);
         new messageReceiver(id,idLider,this);
         followerTimeoutCheck();
@@ -79,19 +81,13 @@ public class Entity {
 
     public synchronized void processMessage(Heartbeat message) {
         switch (message.getType()) {
-            case VOTE:
-                processVoteRequest(message);
-                break;
-            case ACK:
-                //FIX
-                processVoteAck(message);
-                break;
-            case LEADER:
-                //FIX
-                processLeaderHeartbeat(message);
-                break;
-            default:
-                break;
+            case SYNC -> processSync(message);
+            case COMMIT -> processCommit(message);
+            case ACK -> processAck(message);
+            case NEWELEMENT -> processNewElement(message);
+            case REQUEST_VOTE -> processVoteRequest(message);
+            case VOTE -> processVoteAck(message);
+            default -> throw new IllegalArgumentException("Unknown message type: " + message.getType());
         }
     }
 
@@ -101,7 +97,7 @@ public class Entity {
 
         if (candidateTerm > term) {
             term = candidateTerm;
-            type = NodeType.Follower;
+            type = NodeType.FOLLOWER;
             votedInTerm = false;
         }
 
@@ -155,10 +151,15 @@ public class Entity {
         if (leaderTerm >= term) {
             term = leaderTerm;
             idLeader = UUID.fromString(newLeaderId);
-            type = NodeType.Follower;
+            type = NodeType.FOLLOWER;
             votedInTerm = false;
             electionInProgress = false;
         }
+    }
+
+    private void processCommit(Heartbeat commitMessage) {
+        System.out.println("COMMIT message received. Committing pending messages.");
+        msgs.commit(); // Assuming MessageList has a method to mark messages as committed
     }
 
     private void becomeLeader() {
@@ -167,6 +168,21 @@ public class Entity {
         electionInProgress = false;
         System.out.println("Node " + id + " became leader in term " + term);
         sendLeaderHeartbeats();
+    }
+
+    private void processAck(Heartbeat ackMessage) {
+        String followerId = ackMessage.getContent().get("followerId");
+        System.out.println("ACK received from follower: " + followerId);
+    }
+
+    private void processNewElement(Heartbeat newElementMessage) {
+        String newNodeId = newElementMessage.getContent().get("nodeId");
+        System.out.println("New Element joined: " + newNodeId + ". Updating local data.");
+
+        // Leader sends sync to the new element
+        if (type == NodeType.Leader) {
+            syncDataToNewElement(newNodeId);
+        }
     }
 
     private void sendLeaderHeartbeats() {
@@ -213,7 +229,7 @@ public class Entity {
                 content.put("term", String.valueOf(term));
                 break;
 
-            case Follower:
+            case FOLLOWER:
                 // Followers generally don't send heartbeats unless for sync
                 break;
 
@@ -228,7 +244,7 @@ public class Entity {
         new Thread(() -> {
             startTime = System.currentTimeMillis();
 
-            while (type == NodeType.Follower) {
+            while (type == NodeType.FOLLOWER) {
                 try {
                     long currentTime = System.currentTimeMillis();
                     long timePassed = currentTime - startTime;
