@@ -1,7 +1,7 @@
 import java.util.Random;
 
 public enum HeartbeatTime {
-    TIME(1000);
+    TIME(3000);
     private int value;
 
     HeartbeatTime(int value) {
@@ -14,6 +14,6 @@ public enum HeartbeatTime {
 
     public static int generateRandomTimeout() {
         Random random = new Random();
-        return 1100 + random.nextInt(201); // Generates a random value between 1100 and 1300 }
+        return 5000 + random.nextInt(10000);
     }
 }

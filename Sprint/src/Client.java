@@ -9,16 +9,17 @@ public class Client {
                     Main.main(new String[]{});
                     Main.main(new String[]{});
                     Main.main(new String[]{});
-                    Main.main(new String[]{});
+                    //Main.main(new String[]{});
                 } catch (IOException | InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
         });
+
         t.start();
         Thread.sleep(3000);
 
-        try {
+        /*try {
             MessageListInterface m;
             m = (MessageListInterface) Naming.lookup("rmi://localhost:2000/MessageUpdater");
             m.addElement("1", "m1");
@@ -26,7 +27,7 @@ public class Client {
             m.addElement("3", "m3");
         } catch (Exception e) {
             System.out.println("Problemas de Comunicação\n" + e.getMessage());
-        }
+        }*/
 
     }
 }
