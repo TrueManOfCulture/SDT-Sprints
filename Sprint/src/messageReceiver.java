@@ -23,7 +23,7 @@ public class messageReceiver extends Thread {
     public void run() {
         try {
             while (true) {
-                byte[] buffer = new byte[1024];
+                byte[] buffer = new byte[4096];
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 socket.receive(packet);
 

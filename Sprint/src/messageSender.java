@@ -42,13 +42,15 @@ public class messageSender extends Thread {
         Heartbeat heartbeat;
         if (messageList.isEmpty()) {
             heartbeat = new Heartbeat(MessageType.LEADERHEARTBEAT, content);
+            sendSerializedMessage(heartbeat);
+            System.out.println(content);
         }
         else{
             heartbeat = new Heartbeat(MessageType.SYNC, content);
+            sendSerializedMessage(heartbeat);
+            System.out.println(content);
+            messageList.clear();
         }
-
-        sendSerializedMessage(heartbeat);
-        System.out.println("Leader heartbeat sent: " + content);
     }
 
 
