@@ -2,9 +2,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.*;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.UUID;
 
 public class messageSender extends Thread {
     protected MulticastSocket socket = null;
@@ -27,8 +25,6 @@ public class messageSender extends Thread {
             while (true) {
                 switch (entity.getType()) {
                     case NodeType.LEADER -> sendLeaderHeartbeat();
-                    case NodeType.CANDIDATE -> sendVoteRequest();
-                    case NodeType.NEW -> sendNewFollowerBroadcast();
                 }
                 Thread.sleep(HeartbeatTime.TIME.getValue());
             }
@@ -41,35 +37,23 @@ public class messageSender extends Thread {
         }
     }
 
-    private void sendLeaderHeartbeat() throws IOException {
+    private synchronized void sendLeaderHeartbeat() throws IOException {
         HashMap<String, String> content = entity.generateHeartbeatContent();
-        if (content.isEmpty()) return;
+        Heartbeat heartbeat;
+        if (messageList.isEmpty()) {
+            heartbeat = new Heartbeat(MessageType.LEADERHEARTBEAT, content);
+        }
+        else{
+            heartbeat = new Heartbeat(MessageType.SYNC, content);
+        }
 
-        Heartbeat heartbeat = new Heartbeat(MessageType.SYNC, content);
         sendSerializedMessage(heartbeat);
         System.out.println("Leader heartbeat sent: " + content);
     }
 
-    private void sendVoteRequest() throws IOException {
-        HashMap<String, String> content = entity.generateHeartbeatContent();
-        if (content.isEmpty()) return;
 
-        Heartbeat voteRequest = new Heartbeat(MessageType.REQUEST_VOTE, content);
-        sendSerializedMessage(voteRequest);
-        System.out.println("Vote request sent: " + content);
-    }
 
-    private void sendNewFollowerBroadcast() throws IOException {
-        HashMap<String, String> content = new HashMap<>();
-        content.put("followerId", entity.getId().toString());
-        content.put("status", "new");
-
-        Heartbeat newFollowerMessage = new Heartbeat(MessageType.NEWELEMENT, content);
-        sendSerializedMessage(newFollowerMessage);
-        System.out.println("New follower broadcast sent.");
-    }
-
-    private void sendSerializedMessage(Heartbeat message) throws IOException {
+    void sendSerializedMessage(Heartbeat message) throws IOException {
         byte[] serializedMsg = serialize(message);
         DatagramPacket packet = new DatagramPacket(serializedMsg, serializedMsg.length, group, 4446);
         socket.send(packet);

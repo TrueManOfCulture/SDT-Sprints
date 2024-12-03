@@ -1,20 +1,23 @@
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class Entity {
     private UUID id;
-    private UUID idLider;
-    private HashMap data = new HashMap();
-    private HashMap dataPending = new HashMap();
-    private HashMap entidades;
+    private UUID idLeader;
+    private HashMap<String,String> data = new HashMap<>();
+    private HashMap<String,String> dataPending = new HashMap<>();
+    private HashMap entidades = new HashMap();
     private NodeType type;
-    private MessageList msgs;
+    private MessageList msgs = new MessageList();
     private int timeoutLimit;
     private int term = 0;
     private int voteCount = 0;
     private boolean votedInTerm = false;
     private long startTime;
+    private messageSender mS;
+    private messageReceiver mR;
 
     public UUID getId() {
         return id;
@@ -24,36 +27,31 @@ public class Entity {
         id = UUID.randomUUID();
         type = NodeType.NEW;
         timeoutLimit = HeartbeatTime.generateRandomTimeout();
-        new messageSender(msgs,this);
-        new messageReceiver(id,idLider,this);
+        mS = new messageSender(msgs, this);
+        mR = new messageReceiver(msgs,this);
+        sendNewFollowerBroadcast();
         followerTimeoutCheck();
     }
 
-    public synchronized void election() {
-        type = NodeType.CANDIDATE;
-        term++;
-        voteCount = 1;
-        votedInTerm = true;
+    public synchronized void initializeElection() throws IOException {
+        if (type != NodeType.CANDIDATE) {
+            type = NodeType.CANDIDATE;
+            term++;
+            voteCount = 1; // Vote for self
+            votedInTerm = true;
+            System.out.println("Node " + id + " became a candidate for term " + term + " and voted for self.");
+        }
+        Heartbeat voteRequest = new Heartbeat(MessageType.REQUEST_VOTE, generateHeartbeatContent());
+        mS.sendSerializedMessage(voteRequest);
+    }
 
-        /*HashMap<String, String> content = new HashMap<>();
-        content.put("candidateId", id.toString());
-        content.put("term", String.valueOf(term));
-
-        Heartbeat requestVote = new Heartbeat(MessageType.VOTE, content);
-
-        msgs.addElement(UUID.randomUUID().toString(), serialize(requestVote));*/
-
-
-        System.out.println("Started election for term " + term + ". Sent RequestVote messages.");
+    public synchronized boolean isElectionInitialized() {
+        return type == NodeType.CANDIDATE && votedInTerm;
     }
 
 
     public NodeType getType() {
         return type;
-    }
-
-    public void setType(NodeType type) {
-        this.type = type;
     }
 
     public void vote(Heartbeat requestVote) {
@@ -72,165 +70,117 @@ public class Entity {
 
         if (!votedInTerm) {
             votedInTerm = true;
-            startTime = System.currentTimeMillis();;
+            startTime = System.currentTimeMillis();
+            ;
             System.out.println("Voted for candidate " + candidateId + " in term " + term);
         } else {
             System.out.println("Already voted in term " + term);
         }
     }
 
-    public synchronized void processMessage(Heartbeat message) {
+    public synchronized void processMessage(Heartbeat message) throws IOException {
         switch (message.getType()) {
             case SYNC -> processSync(message);
             case COMMIT -> processCommit(message);
             case ACK -> processAck(message);
-            case NEWELEMENT -> processNewElement(message);
-            case REQUEST_VOTE -> processVoteRequest(message);
+            case NEWELEMENT -> processAckNew(message);
+            case REQUEST_VOTE -> vote(message);
             case VOTE -> processVoteAck(message);
             default -> throw new IllegalArgumentException("Unknown message type: " + message.getType());
         }
     }
 
-    private void processVoteRequest(Heartbeat message) {
-        String candidateId = message.getContent().get("candidateId");
-        int candidateTerm = Integer.parseInt(message.getContent().get("term"));
-
-        if (candidateTerm > term) {
-            term = candidateTerm;
-            type = NodeType.FOLLOWER;
-            votedInTerm = false;
-        }
-
-        if (!votedInTerm && candidateTerm >= term) {
-            votedInTerm = true;
-            timeoutLimit = HeartbeatTime.generateRandomTimeout();
-
-            // Send VoteAck
-            HashMap<String, String> content = new HashMap<>();
-            content.put("voterId", id.toString());
-            content.put("term", String.valueOf(term));
-            Heartbeat voteAck = new Heartbeat(MessageType.ACK, content);
-            msgs.addElement(UUID.randomUUID().toString(), serialize(voteAck));
-            System.out.println("Voted for candidate " + candidateId);
-        }
-    }
-
-    public void processSync(Heartbeat syncHeartbeat) {
-        // Extract and process update data
+    public void processSync(Heartbeat syncHeartbeat) throws IOException {
         String leaderId = syncHeartbeat.getContent().get("leaderId");
-        String dataUpdate = syncHeartbeat.getContent().get("data");
+        HashMap<String, String> dataUpdate = syncHeartbeat.getContent();
         System.out.println("Received SYNC update from leader " + leaderId + ": " + dataUpdate);
+        for (Map.Entry<String, String> entry : dataUpdate.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            dataPending.put(key, value);
+        }
 
-        // Respond with ACK to the leader
         HashMap<String, String> content = new HashMap<>();
         content.put("followerId", id.toString());
         content.put("term", String.valueOf(term));
         content.put("ack", "true");
 
         Heartbeat ack = new Heartbeat(MessageType.ACK, content);
-        msgs.addElement(UUID.randomUUID().toString(), serialize(ack));
+        mS.sendSerializedMessage(ack);
     }
 
 
-    private void processVoteAck(Heartbeat message) {
+    private void processVoteAck(Heartbeat message) throws IOException {
         String voterId = message.getContent().get("voterId");
         int ackTerm = Integer.parseInt(message.getContent().get("term"));
 
-        if (type == NodeType.Candidate && ackTerm == term) {
+        if (type == NodeType.CANDIDATE && ackTerm == term) {
             voteCount++;
-            if (voteCount > (totalNodes() / 2)) { // Assuming totalNodes() gives the total nodes in the system
+            if (voteCount > (entidades.size() / 2)) { // Assuming totalNodes() gives the total nodes in the system
                 becomeLeader();
             }
         }
     }
 
     private void processLeaderHeartbeat(Heartbeat message) {
-        String newLeaderId = message.getContent().get("leaderId");
+        String leaderId = message.getContent().get("leaderId");
         int leaderTerm = Integer.parseInt(message.getContent().get("term"));
 
         if (leaderTerm >= term) {
             term = leaderTerm;
-            idLeader = UUID.fromString(newLeaderId);
+            idLeader = UUID.fromString(leaderId);
             type = NodeType.FOLLOWER;
+            voteCount = 0;
             votedInTerm = false;
-            electionInProgress = false;
+            System.out.println("Received LEADER heartbeat. Leader: " + leaderId + " for term: " + term);
+        } else {
+            System.out.println("Ignoring outdated LEADER heartbeat from " + leaderId);
         }
     }
+
 
     private void processCommit(Heartbeat commitMessage) {
         System.out.println("COMMIT message received. Committing pending messages.");
-        msgs.commit(); // Assuming MessageList has a method to mark messages as committed
+        for (Map.Entry<String, String> entry : dataPending.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            data.put(key, value);
+        }
     }
 
-    private void becomeLeader() {
-        type = NodeType.Leader;
+    private void becomeLeader() throws IOException {
+        type = NodeType.LEADER;
         idLeader = id;
-        electionInProgress = false;
         System.out.println("Node " + id + " became leader in term " + term);
-        sendLeaderHeartbeats();
-    }
+        HashMap<String, String> content = new HashMap<>();
+        content.put("leaderID", id.toString());
+        content.put("term", String.valueOf(term));
 
-    private void processAck(Heartbeat ackMessage) {
-        String followerId = ackMessage.getContent().get("followerId");
-        System.out.println("ACK received from follower: " + followerId);
-    }
-
-    private void processNewElement(Heartbeat newElementMessage) {
-        String newNodeId = newElementMessage.getContent().get("nodeId");
-        System.out.println("New Element joined: " + newNodeId + ". Updating local data.");
-
-        // Leader sends sync to the new element
-        if (type == NodeType.Leader) {
-            syncDataToNewElement(newNodeId);
-        }
-    }
-
-    private void sendLeaderHeartbeats() {
-        new Thread(() -> {
-            while (type == NodeType.Leader) {
-                HashMap<String, String> content = new HashMap<>();
-                content.put("leaderId", id.toString());
-                content.put("term", String.valueOf(term));
-                Heartbeat heartbeat = new Heartbeat(MessageType.LEADER, content);
-                msgs.addElement(UUID.randomUUID().toString(), serialize(heartbeat));
-
-                try {
-                    Thread.sleep(HeartbeatTime.TIME.getValue());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }).start();
-    }
-
-    public MessageType getHeartbeatType() {
-        switch (type) {
-            case Leader:
-                return MessageType.LEADER;
-            case Candidate:
-                return MessageType.VOTE; // Send vote requests
-            default:
-                return MessageType.SYNC; // Followers send sync requests, if needed
-        }
+        Heartbeat leader = new Heartbeat(MessageType.LEADER, content);
+        mS.sendSerializedMessage(leader);
     }
 
     public synchronized HashMap<String, String> generateHeartbeatContent() {
         HashMap<String, String> content = new HashMap<>();
 
         switch (type) {
-            case Leader:
-                content.put("leaderId", id.toString());
-                content.put("term", String.valueOf(term));
-                content.put("data", getPendingUpdates()); // Example: sync updates
+            case LEADER:
+                if (msgs.isEmpty()) {
+                    content.put("leaderId", id.toString());
+                    content.put("term", String.valueOf(term));
+                }else{
+                    content = msgs.getClone();
+                }
                 break;
 
-            case Candidate:
+            case CANDIDATE:
                 content.put("candidateId", id.toString());
                 content.put("term", String.valueOf(term));
                 break;
 
             case FOLLOWER:
-                // Followers generally don't send heartbeats unless for sync
+                content.put("followerId", id.toString());
+                content.put("status", "new");
                 break;
 
             default:
@@ -244,14 +194,14 @@ public class Entity {
         new Thread(() -> {
             startTime = System.currentTimeMillis();
 
-            while (type == NodeType.FOLLOWER) {
+            while (type == NodeType.FOLLOWER || type == NodeType.NEW) {
                 try {
                     long currentTime = System.currentTimeMillis();
                     long timePassed = currentTime - startTime;
 
                     if (timePassed >= timeoutLimit) {
                         System.out.println("Timeout occurred. No leader heartbeat received. Starting election...");
-                        election();
+                        initializeElection();
                         break;
                     }
 
@@ -259,10 +209,53 @@ public class Entity {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     System.out.println("Timeout check interrupted.");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }).start();
     }
 
+    void processAck(Heartbeat ackMessage) {
+        if (type != NodeType.LEADER) {
+            System.out.println("Received ACK, but this node is not a leader.");
+            return;
+        }
 
+        String followerId = ackMessage.getContent().get("followerId");
+        String ackTerm = ackMessage.getContent().get("term");
+
+        if (Integer.parseInt(ackTerm) < term) {
+            System.out.println("Ignoring outdated ACK from follower: " + followerId);
+            return;
+        }
+
+        System.out.println("Received ACK from follower: " + followerId + " for term: " + term);
+    }
+
+    void processAckNew(Heartbeat ackMessage) {
+        if (type != NodeType.LEADER) {
+            System.out.println("Received ACK, but this node is not a leader.");
+            return;
+        }
+
+        String followerId = ackMessage.getContent().get("followerId");
+        String ackTerm = ackMessage.getContent().get("term");
+
+        if (Integer.parseInt(ackTerm) < term) {
+            System.out.println("Ignoring outdated ACK from follower: " + followerId);
+            return;
+        }
+
+        System.out.println("Received ACK from follower: " + followerId + " for term: " + term);
+    }
+
+    void sendNewFollowerBroadcast() throws IOException {
+        HashMap<String, String> content = new HashMap<>();
+        content.put("nodeID", id.toString());
+
+        Heartbeat newFollowerMessage = new Heartbeat(MessageType.NEWELEMENT, content);
+        mS.sendSerializedMessage(newFollowerMessage);
+        System.out.println("New follower broadcast sent.");
+    }
 }

@@ -1,10 +1,11 @@
-import java.util.ArrayList;
+import java.io.Serializable;
 import java.util.HashMap;
 
-public class Heartbeat {
+public class Heartbeat implements Serializable {
     static int id = 0;
     private MessageType type;
     private HashMap<String,String> content;
+    private static final long serialVersionUID = 1L;
 
     public Heartbeat(MessageType type, HashMap<String,String> content) {
         id++;

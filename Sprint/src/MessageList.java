@@ -14,6 +14,10 @@ public class MessageList  extends UnicastRemoteObject implements MessageListInte
         super();
     }
 
+    public synchronized boolean isEmpty(){
+        return messageList.isEmpty();
+    }
+
     public synchronized void addElement(String k, String o){
         messageList.put(k,o);
     }
